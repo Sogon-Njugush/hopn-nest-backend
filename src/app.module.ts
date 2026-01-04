@@ -4,7 +4,7 @@ import { AppService } from './app.service';
 import { ContactModule } from './contact/contact.module';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ContactMessage } from './contact/entities/contact.entity';
 
 @Module({
@@ -24,20 +24,25 @@ import { ContactMessage } from './contact/entities/contact.entity';
       },
     }),
     //  Email Configuration (Using .env variables)
-    MailerModule.forRoot({
-      transport: {
-        host: process.env.SMTP_HOST,
-        port: 587,
-        secure: false,
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+    MailerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        transport: {
+          host: configService.get<string>('SMTP_HOST'),
+          port: configService.get<number>('SMTP_PORT'),
+          secure: configService.get<number>('SMTP_PORT') === 465,
+          auth: {
+            user: configService.get<string>('SMTP_USER'),
+            pass: configService.get<string>('SMTP_PASS'),
+          },
         },
-      },
-      defaults: {
-        from: '"No Reply" <noreply@hopn.eu>',
-      },
+        defaults: {
+          from: `"HOPn Support" <${configService.get<string>('SMTP_USER')}>`,
+        },
+      }),
     }),
+
     ContactModule,
   ],
   controllers: [AppController],
