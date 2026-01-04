@@ -1,28 +1,17 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import sgMail from '@sendgrid/mail'; // FIXED IMPORT
+import { MailerService } from '@nestjs-modules/mailer';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { ContactMessage } from './entities/contact.entity';
 
 @Injectable()
-export class ContactService implements OnModuleInit {
+export class ContactService {
   constructor(
     @InjectRepository(ContactMessage)
     private contactRepository: Repository<ContactMessage>,
+    private readonly mailerService: MailerService,
   ) {}
-
-  onModuleInit() {
-    const apiKey = process.env.SENDGRID_API_KEY;
-    if (!apiKey) {
-      throw new Error('SENDGRID_API_KEY is not defined in .env');
-    }
-    sgMail.setApiKey(apiKey);
-  }
 
   async create(createContactDto: CreateContactDto) {
     try {
@@ -30,11 +19,7 @@ export class ContactService implements OnModuleInit {
       const newMessage = this.contactRepository.create(createContactDto);
       await this.contactRepository.save(newMessage);
 
-      // 2. Prepare Email Data
-      const senderEmail =
-        process.env.SENDGRID_FROM_EMAIL || 'dev.sogon@gmail.com';
-
-      // --- USER ACKNOWLEDGMENT EMAIL ---
+      // 2. Generate Themed HTML Content
       const userHtml = this.generateEmailTemplate(
         `We received your message`,
         `
@@ -52,7 +37,6 @@ export class ContactService implements OnModuleInit {
         `,
       );
 
-      // --- ADMIN NOTIFICATION EMAIL ---
       const adminHtml = this.generateEmailTemplate(
         `New Contact Submission`,
         `
@@ -77,29 +61,25 @@ export class ContactService implements OnModuleInit {
         `,
       );
 
-      const userMsg = {
-        to: createContactDto.email,
-        from: { name: 'HOPn Support', email: senderEmail },
-        subject: `We received your message: ${createContactDto.subject}`,
-        html: userHtml,
-      };
+      // 3. Send Emails (Async)
 
-      const adminMsg = {
-        to: 'dev.sogon@gmail.com', // Replace with real admin email
-        from: { name: 'HOPn System', email: senderEmail },
-        subject: `[New Inquiry] ${createContactDto.subject}`,
-        html: adminHtml,
-      };
+      // User Acknowledgment
+      this.mailerService
+        .sendMail({
+          to: createContactDto.email,
+          subject: `We received your message: ${createContactDto.subject}`,
+          html: userHtml,
+        })
+        .catch((err) => console.error('User email failed', err));
 
-      // 3. Send emails
-      await Promise.all([
-        sgMail
-          .send(userMsg)
-          .catch((err) => console.error('User email failed', err)),
-        sgMail
-          .send(adminMsg)
-          .catch((err) => console.error('Admin email failed', err)),
-      ]);
+      // Admin Notification
+      this.mailerService
+        .sendMail({
+          to: 'admin@hopn.eu', // Replace with your actual admin email
+          subject: `[New Inquiry] ${createContactDto.subject}`,
+          html: adminHtml,
+        })
+        .catch((err) => console.error('Admin email failed', err));
 
       return { success: true, message: 'Message saved successfully' };
     } catch (error) {
@@ -136,7 +116,6 @@ export class ContactService implements OnModuleInit {
             <td align="center">
               <br/><br/>
               <table class="content" cellpadding="0" cellspacing="0" role="presentation" width="100%">
-                
                 <tr>
                   <td class="header">
                     <div class="logo">
@@ -144,12 +123,10 @@ export class ContactService implements OnModuleInit {
                     </div>
                   </td>
                 </tr>
-
                 <tr>
                   <td class="body">
                     <h2 style="color: #ffffff; margin-top: 0; font-size: 20px;">${title}</h2>
                     ${content}
-                    
                     <br/>
                     <p style="margin-bottom: 0;">
                       Best regards,<br/>
@@ -157,16 +134,13 @@ export class ContactService implements OnModuleInit {
                     </p>
                   </td>
                 </tr>
-
               </table>
-              
               <div class="footer">
                 <p style="margin: 0 0 8px;">Pioneering Tomorrow's Technology, Today.</p>
                 <p style="margin: 0;">
                   HOPn &bull; Weichterstr 1, Buchloe, Germany &bull; <a href="https://hopn.eu">hopn.eu</a>
                 </p>
               </div>
-
             </td>
           </tr>
         </table>
