@@ -31,7 +31,8 @@ export class ContactService implements OnModuleInit {
       await this.contactRepository.save(newMessage);
 
       // 2. Prepare Email Data
-      const senderEmail = process.env.SENDGRID_FROM_EMAIL || 'no-reply@hopn.eu';
+      const senderEmail =
+        process.env.SENDGRID_FROM_EMAIL || 'dev.sogon@gmail.com';
 
       // --- USER ACKNOWLEDGMENT EMAIL ---
       const userHtml = this.generateEmailTemplate(
@@ -84,7 +85,7 @@ export class ContactService implements OnModuleInit {
       };
 
       const adminMsg = {
-        to: 'admin@hopn.eu', // Replace with real admin email
+        to: 'dev.sogon@gmail.com', // Replace with real admin email
         from: { name: 'HOPn System', email: senderEmail },
         subject: `[New Inquiry] ${createContactDto.subject}`,
         html: adminHtml,
