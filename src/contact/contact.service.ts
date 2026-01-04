@@ -15,15 +15,19 @@ export class ContactService {
 
   async create(createContactDto: CreateContactDto) {
     try {
-      // 1. Save to Database
+      //Save to Database
       const newMessage = this.contactRepository.create(createContactDto);
       await this.contactRepository.save(newMessage);
 
-      // 2. Send Acknowledgment Email to Sender
-      await this.mailerService.sendMail({
-        to: createContactDto.email,
-        subject: `We received your message: ${createContactDto.subject}`,
-        html: `
+      // Respond immediately
+      const response = { success: true, message: 'Message saved successfully' };
+
+      // Send emails asynchronously (non-blocking)
+      this.mailerService
+        .sendMail({
+          to: createContactDto.email,
+          subject: `We received your message: ${createContactDto.subject}`,
+          html: `
           <h3>Hello ${createContactDto.fullName},</h3>
           <p>Thank you for contacting HOPn. We have received your message and will get back to you shortly.</p>
           <br/>
@@ -33,18 +37,20 @@ export class ContactService {
           <p>Best regards,</p>
           <p>The HOPn Team</p>
         `,
-      });
+        })
+        .catch((err) => console.error('Failed to send user email', err));
 
-      // Optional: Send Notification to Admin
-      await this.mailerService.sendMail({
-        to: 'admin@hopn.eu',
-        subject: `New Contact Form Submission: ${createContactDto.subject}`,
-        html: `<p>New message from <strong>${createContactDto.fullName}</strong> (${createContactDto.email}):</p><p>${createContactDto.message}</p>`,
-      });
+      this.mailerService
+        .sendMail({
+          to: 'admin@hopn.eu',
+          subject: `New Contact Form Submission: ${createContactDto.subject}`,
+          html: `<p>New message from <strong>${createContactDto.fullName}</strong> (${createContactDto.email}):</p><p>${createContactDto.message}</p>`,
+        })
+        .catch((err) => console.error('Failed to send admin email', err));
 
-      return { success: true, message: 'Message sent successfully' };
+      return response;
     } catch (error) {
-      console.error('Error sending contact message:', error);
+      console.error('Error processing contact message:', error);
       throw new InternalServerErrorException('Failed to process request');
     }
   }
